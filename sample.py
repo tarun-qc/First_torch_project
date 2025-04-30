@@ -23,9 +23,9 @@ print(device)
 
 data_df = pd.read_csv(path +"\\riceClassification.csv")
 # print(data_df)
-print(data_df.shape)
-print(data_df.dropna(inplace=True))
-print(data_df.drop(['id'], axis=1, inplace=True)) #axis=1 is representation to drop column
+print(data_df.shape) #know shape of data
+print(data_df.dropna(inplace=True)) #drop empty values
+print(data_df.drop(['id'], axis=1, inplace=True)) #axis=1 is representation to drop column, otherwise it will be row
 print(data_df.shape)
 print("These are unique values in column of Class:",data_df["Class"].unique()) #print unique values for column Class column
 """
@@ -37,13 +37,15 @@ print(data_df["Class"].value_counts())
 """Normalize (change of unit to make max value 1) each column in dataset, 
 because big values will require more storage and loss function will roundup
 the value for big numbers, which may give wrong result"""
-origina_df = data_df.copy() #we require this for inference
+original_df = data_df.copy() #we require this for inference
 for column in data_df.columns:
     data_df[column] = data_df[column]/data_df[column].abs().max() #divide by max value of that column
 print(data_df.head())
 
 X = np.array(data_df.iloc[:,:-1]) #take all rows and columns except the last one
 Y = np.array(data_df.iloc[:,-1]) #take all rows and only last column
+print(X)
+print(Y)
 X_train, X_test,Y_train, Y_test = train_test_split(X, Y, test_size = 0.3) #30% for testing, only take 70% data for training
 """X_val: validation
 Y_val: validation
@@ -52,3 +54,99 @@ X_test, X_val,Y_test, Y_val = train_test_split(X_test, Y_test, test_size = 0.5) 
 print(X_train.shape)
 print(X_test.shape)
 print(X_val.shape)
+
+class dataset(Dataset):
+    def __init__(self, X, Y): #this is constructor, self, input,output
+        self.X = torch.tensor(X, dtype = torch.float32).to(device) #convert our numpy or panda data to tensor
+        self.Y = torch.tensor(Y, dtype = torch.float32).to(device) #torch can only understand tensor
+    
+    def __len__(self):
+        return len(self.X)
+    
+    def __getitem__(self, index):
+        return self.X[index], self.Y[index]
+
+training_data = dataset(X_train, Y_train)
+validation_data = dataset(X_val, Y_val)
+testing_data = dataset(X_test, Y_test)
+
+train_dataloader = DataLoader(training_data, batch_size = 32, shuffle = True)
+validation_dataloader = DataLoader(training_data, batch_size = 32, shuffle = True)
+testing_dataloader = DataLoader(training_data, batch_size = 32, shuffle = True)
+
+for x,y in train_dataloader:
+    print(x)
+    print("======")
+    print(y)
+    break
+
+HIDDEN_NEURONS = 10
+class MyModel(nn.Module):
+    def __init__(self):
+        super(MyModel, self).__init__()
+
+        self.input_layer = nn.Linear(X.shape[1], HIDDEN_NEURONS)
+        self.linear = nn.Linear(HIDDEN_NEURONS, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.input_layer(x)
+        x = self.linear(x)
+        x = self.sigmoid(x)
+        return x
+    
+model = MyModel().to(device)
+
+summary(model, (X.shape[1],))
+criterion = nn.BCELoss()
+optimizer = Adam(model.parameters(), lr =1e-3) #Adam function takes parameters and learning rate
+
+total_loss_train_plot = [] #total loss
+total_loss_validation_plot = [] #total loss
+total_acc_train_plot = [] #total accuracy
+total_acc_validation_plot = [] #total accuracy
+
+epochs = 10
+for epoch in range(epochs):
+    total_acc_train = 0
+    total_loss_train = 0
+    total_acc_val = 0
+    total_loss_val = 0
+    for data in train_dataloader:
+        inputs, labels = data
+        prediction = model(inputs).squeeze(1) #inorder to make prediction in same dimension as labels
+        batch_loss = criterion(prediction, labels)
+        total_loss_train += batch_loss.item()
+        acc = (prediction.round() == labels).sum().item()
+        # print(acc)
+        total_acc_train += acc
+        batch_loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+    with torch.no_grad():
+        for data in validation_dataloader:
+            inputs, labels =data
+
+            prediction = model(inputs).squeeze(1)
+            batch_loss = criterion(prediction, labels)
+            total_loss_val += batch_loss.item()
+            acc = ((prediction).round() == labels).sum().item()
+
+            total_acc_val += acc
+    total_loss_train_plot.append(round(total_loss_train/1000, 4))
+    total_loss_validation_plot.append(round(total_loss_val/1000, 4))
+    total_acc_train_plot.append(round(total_acc_train/training_data.__len__()*100, 4))
+    total_acc_validation_plot.append(round(total_acc_val/1000, 4))
+    print(f'''Epoch no. {epoch+1} Train Loss: {round(total_loss_train/100, 4)} Train Accuracy {round(total_acc_train/training_data.__len__()*100, 4)} Validation Loss: {round(total_loss_val/1000, 4)} Validation Accuracy: {round(total_acc_val/validation_data.__len__()*100, 4)}''')
+    print("="*25)
+with torch.no_grad():
+    total_loss_test=0
+    total_acc_test=0
+    for data in testing_dataloader:
+        inputs, labels = data
+        prediction = model(input).squeeze(1)
+        batch_loss_test = criterion(prediction, labels).item()
+        total_loss_test += batch_loss_test
+        acc = ((prediction).round() == labels).sum().item
+        total_acc_test +=acc
+print("Accuracy: ", round(total_acc_train/testing_data.__len__()*100,4))
