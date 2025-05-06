@@ -144,9 +144,25 @@ with torch.no_grad():
     total_acc_test=0
     for data in testing_dataloader:
         inputs, labels = data
-        prediction = model(input).squeeze(1)
+        prediction = model(inputs).squeeze(1)
         batch_loss_test = criterion(prediction, labels).item()
         total_loss_test += batch_loss_test
-        acc = ((prediction).round() == labels).sum().item
-        total_acc_test +=acc
-print("Accuracy: ", round(total_acc_train/testing_data.__len__()*100,4))
+        acc = ((prediction).round() == labels).sum().item()
+        total_acc_test += acc
+print("Accuracy: ", round(total_acc_test/testing_data.__len__()*100,4))
+fig, axs = plt.subplots(nrows = 1, ncols = 2, figsize=(15,5))
+axs[0].plot(total_loss_train_plot, label='Training Loss')
+axs[0].plot(total_loss_validation_plot, label='Validation Loss')
+axs[0].set_title("Training and Validation Loss over epochs")
+axs[0].set_xlabel('Epochs')
+axs[0].set_ylabel('Loss')
+axs[0].set_ylim([0,2])
+axs[0].legend()
+axs[1].plot(total_acc_train_plot, label='Training Accuracy')
+axs[1].plot(total_acc_validation_plot, label='Validation Accuracy')
+axs[1].set_title("Training and Validation Accuracy over epochs")
+axs[1].set_xlabel('Epochs')
+axs[1].set_ylabel('Accuracy')
+axs[1].set_ylim([0,100])
+axs[1].legend()
+plt.show()
